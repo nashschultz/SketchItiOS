@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>702695726101-elgvvbl7j0hj7iqpm9jlhsr949kkkp3d.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.702695726101-elgvvbl7j0hj7iqpm9jlhsr949kkkp3d</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAODUzd2RbqHg0Y_ZgYdlbMoT2UkvOPJHY</string>
+	<key>GCM_SENDER_ID</key>
+	<string>702695726101</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.nashschultz.Pictionary</string>
+	<key>PROJECT_ID</key>
+	<string>pictionary-7069b</string>
+	<key>STORAGE_BUCKET</key>
+	<string>pictionary-7069b.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:702695726101:ios:71b2aa0f7561be2257421c</string>
+	<key>DATABASE_URL</key>
+	<string>https://pictionary-7069b.firebaseio.com</string>
+</dict>
+</plist>
