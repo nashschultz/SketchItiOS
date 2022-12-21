@@ -9,9 +9,9 @@
 import Foundation
 
 class Game {
-    private var _gameID: String!
-    private var _totalPlayers: Int!
-    private var _ownerName: String!
+    private var _gameID: String
+    private var _totalPlayers: Int
+    private var _ownerName: String
     
     var gameID: String {
         return _gameID

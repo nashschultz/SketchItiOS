@@ -18,20 +18,18 @@ class CreateGameViewController: UIViewController, UITableViewDelegate, UITableVi
     @IBOutlet weak var shareButton: UIButton!
     @IBOutlet weak var backButton: UIButton!
     
-    var ref: DatabaseReference!
-    var finalGameID: String!
+    var ref = Database.database().reference()
+    var finalGameID: String?
     var nameList: [String] = []
     var idList: [String] = []
-    var currentName: String!
-    var userID: String!
+    var currentName: String?
+    var userID: String?
     var isRematch = false
     var time = 45
     var privacy = "private"
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        ref = Database.database().reference()
         
         startButton.layer.cornerRadius = 20.0
         shareButton.layer.cornerRadius = 20.0
@@ -41,21 +39,16 @@ class CreateGameViewController: UIViewController, UITableViewDelegate, UITableVi
         
         self.playerTableView.separatorStyle = UITableViewCell.SeparatorStyle.none
         
-        if #available(iOS 13.0, *) {
-            // stay
-        } else {
-            backButton.setImage(UIImage(named: "backarrow.png"), for: .normal)
-        }
-        
         createGame()
-        // Do any additional setup after loading the view.
     }
     
     func createGame() {
         if isRematch == false {
             let gameID = String(Int.random(in: 100000 ... 999999))
-            self.ref.child("games").child(gameID).observeSingleEvent(of: .value, with: { (snapshot) in
+            ref.child("games").child(gameID).observeSingleEvent(of: .value, with: { [weak self] (snapshot) in
                 // Get user value
+                guard let self = self else { return }
+                
                 let value = snapshot.value as? NSDictionary
                 let numPlayers = value?["count"] as? String ?? ""
                 if numPlayers == "" {
@@ -73,38 +66,46 @@ class CreateGameViewController: UIViewController, UITableViewDelegate, UITableVi
     }
     
     func codeGenerated() {
-        self.gameCodeLabel.text = self.finalGameID
+        gameCodeLabel.text = finalGameID
+        guard let finalGameID = finalGameID else { return }
+        
         if isRematch == true {
-            self.ref.child("games").child(self.finalGameID).updateChildValues(["count": 1,
+            self.ref.child("games").child(finalGameID).updateChildValues(["count": 1,
                                                                       "round" : 0,
                                                                       "lock" : 0,
                                                                       "timestamp" : Firebase.ServerValue.timestamp(),
-                                                                      "players" : [self.userID : [
-                                                                                                  "name": self.currentName as Any,
+                                                                      "players" : [userID : [
+                                                                                                  "name": currentName as Any,
                                                                                                   "timestamp": Firebase.ServerValue.timestamp()]]
             ])
         } else {
-            self.ref.child("games").child(self.finalGameID).setValue(["count": 1,
+            ref.child("games").child(finalGameID).setValue(["count": 1,
                                                                       "security" : "private",
                                                                       "round" : 0,
                                                                       "lock" : 0,
                                                                       "timestamp" : Firebase.ServerValue.timestamp(),
-                                                                      "players" : [self.userID : [
-                                                                                                  "name": self.currentName as Any,
+                                                                      "players" : [userID : [
+                                                                                                  "name": currentName as Any,
                                                                         "timestamp": Firebase.ServerValue.timestamp()]]
             ])
         }
-        self.ref.child("games").child(self.finalGameID).child("players").observe(.value) { snapshot in
+        
+        ref.child("games").child(finalGameID).child("players").observe(.value) { [weak self] snapshot in
+            guard let self = self else { return }
+            
             self.nameList.removeAll()
             self.idList.removeAll()
-            for rest in snapshot.children.allObjects as! [DataSnapshot] {
+            for rest in snapshot.children.allObjects as? [DataSnapshot] ?? [] {
                 let postDict = rest.value as? [String : AnyObject] ?? [:]
-                self.nameList.append(postDict["name"] as! String)
-                self.idList.append(rest.key)
+                if let name = postDict["name"] as? String {
+                    self.nameList.append(name)
+                    self.idList.append(rest.key)
+                }
             }
+            
             self.playerTableView.reloadData()
             self.playerLabel.text = "Players: " + String(self.nameList.count) + "/12"
-            self.ref.child("games").child(self.finalGameID).child("count").setValue(self.nameList.count)
+            self.ref.child("games").child(finalGameID).child("count").setValue(self.nameList.count)
             if self.nameList.count > 1 {
                 self.startButton.alpha = 1.0
                 self.startButton.setTitle("Start Game", for: .normal)
@@ -114,36 +115,36 @@ class CreateGameViewController: UIViewController, UITableViewDelegate, UITableVi
     }
     
     @objc func removePlayer(_sender: AnyObject) {
-        print("clicked")
+        guard let finalGameID = finalGameID else { return }
         let buttonPosition = _sender.convert(CGPoint.zero, to: self.playerTableView)
-        let indexPath: IndexPath? = playerTableView.indexPathForRow(at: buttonPosition)
-        //selectedPost = postList[(indexPath!.row - 1)]
-        self.ref.child("games").child(self.finalGameID).child("players").child(idList[indexPath!.row - 1]).removeValue()
+        guard let indexPath: IndexPath = playerTableView.indexPathForRow(at: buttonPosition) else { return }
+        ref.child("games").child(finalGameID).child("players").child(idList[indexPath.row - 1]).removeValue()
     }
     
     @IBAction func startTheGame() {
+        guard let finalGameID = finalGameID else { return }
         if startButton.alpha == 1.0 {
-            self.ref.child("games").child(self.finalGameID).updateChildValues(["lock": 1, "time" : self.time])
-            self.ref.child("games").child(self.finalGameID).child("players").removeAllObservers()
-            self.performSegue(withIdentifier: "toGame", sender: nil)
+            ref.child("games").child(finalGameID).updateChildValues(["lock": 1, "time" : self.time])
+            ref.child("games").child(finalGameID).child("players").removeAllObservers()
+            performSegue(withIdentifier: "toGame", sender: nil)
         }
     }
     
     @IBAction func leaveGame() {
-        self.ref.removeAllObservers()
-        if finalGameID != nil && isRematch == false {
-            self.ref.child("games").child(self.finalGameID!).removeValue()
-        } else if finalGameID != nil && isRematch == true {
-            self.ref.child("games").child(finalGameID).child("players").removeValue()
-            self.ref.child("games").child(finalGameID).child("lock").setValue(1)
+        ref.removeAllObservers()
+        if let finalGameID = finalGameID, !isRematch {
+            ref.child("games").child(finalGameID).removeValue()
+        } else if let finalGameID = finalGameID, isRematch {
+            ref.child("games").child(finalGameID).child("players").removeValue()
+            ref.child("games").child(finalGameID).child("lock").setValue(1)
         }
-        self.dismiss(animated: true, completion: nil)
+        dismiss(animated: true, completion: nil)
     }
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         switch segue.identifier {
         case "toGame"?:
-            let destination = segue.destination as! NewWordViewController
+            guard let destination = segue.destination as? NewWordViewController else { return }
             destination.name = self.currentName
             destination.userID = self.userID
             destination.gameID = self.finalGameID
@@ -156,26 +157,27 @@ class CreateGameViewController: UIViewController, UITableViewDelegate, UITableVi
     
     @objc func changeTime(_sender: UIButton) {
         if _sender.titleLabel!.text == "45s" {
-            self.time = 45
+            time = 45
         } else if _sender.titleLabel!.text == "30s" {
-            self.time = 30
+            time = 30
         } else if _sender.titleLabel!.text == "60s" {
-            self.time = 60
+            time = 60
         }
     }
     
     @objc func changePrivacy(_sender: UIButton) {
+        guard let finalGameID = finalGameID else { return }
         if _sender.titleLabel!.text == "Public" {
-            self.privacy = "public"
-            self.ref.child("games").child(self.finalGameID).updateChildValues(["security": self.privacy])
+            privacy = "public"
+            ref.child("games").child(finalGameID).updateChildValues(["security": privacy])
         } else if _sender.titleLabel!.text == "Private" {
-            self.privacy = "private"
-            self.ref.child("games").child(self.finalGameID).updateChildValues(["security": self.privacy])
+            privacy = "private"
+            ref.child("games").child(finalGameID).updateChildValues(["security": privacy])
         }
     }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return self.nameList.count + 2
+        return nameList.count + 2
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -214,8 +216,8 @@ class CreateGameViewController: UIViewController, UITableViewDelegate, UITableVi
     }
     
     @IBAction func shareButtonTapped(_ sender: UIButton) {
-        if self.currentName != nil && self.finalGameID != nil {
-            let textToShare = "Join " + self.currentName + " in a game of Sketch It! Game Code: " + self.finalGameID!
+        if let currentName = currentName, let finalGameID = finalGameID {
+            let textToShare = "Join " + currentName + " in a game of Sketch It! Game Code: " + finalGameID
          
             if let myWebsite = NSURL(string: "http://www.sketchit.space/download") {
                 let objectsToShare: [Any] = [textToShare, myWebsite]
@@ -226,17 +228,4 @@ class CreateGameViewController: UIViewController, UITableViewDelegate, UITableVi
             }
         }
     }
-    
-    
-
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
-    }
-    */
-
 }

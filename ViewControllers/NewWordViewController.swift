@@ -21,24 +21,23 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
     @IBOutlet weak var newWordButton: UIButton!
     @IBOutlet weak var otherLabel: UILabel!
     
-    var name: String!
+    var name: String?
     var nameList: [String] = []
-    var userID: String!
-    var gameID: String!
-    var ref: DatabaseReference!
+    var userID: String?
+    var gameID: String?
+    var ref = Database.database().reference()
     var idList: [String] = []
     var isEven = false
     var evenAddition = 1
-    var randomWord: String!
-    var customCount: Int!
-    var bannerView: GADBannerView!
+    var randomWord: String?
+    var customCount: Int?
+    var bannerView: GADBannerView?
     var isHost = false
     var time = 45
     var newWordCounts = 0
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        ref = Database.database().reference()
         
         submitButton.layer.cornerRadius = 20.0
         customWordButton.layer.cornerRadius = 20.0
@@ -49,13 +48,15 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
         wordField.delegate = self
         
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(self.dismissKeyboard (_:)))
-        self.view.addGestureRecognizer(tapGesture)
+        view.addGestureRecognizer(tapGesture)
         
         bannerView = GADBannerView(adSize: kGADAdSizeSmartBannerPortrait)
-        bannerView.adUnitID = "ca-app-pub-5912556187565517/8446111558"
-        bannerView.rootViewController = self
-        bannerView.load(GADRequest())
-        addBannerViewToView(bannerView)
+        bannerView?.adUnitID = "ca-app-pub-5912556187565517/8446111558"
+        bannerView?.rootViewController = self
+        bannerView?.load(GADRequest())
+        if let bannerView = bannerView {
+            addBannerViewToView(bannerView)
+        }
     }
     
     func addBannerViewToView(_ bannerView: GADBannerView) {
@@ -87,44 +88,49 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
         loadWordCount()
         loadPlayerList()
         loadTime()
+        
+        guard let gameID = gameID else { return }
+        
         if isHost == true {
-            self.ref.child("games").child(gameID).child("round0").removeValue()
-            self.hostDelete.isHidden = false
+            ref.child("games").child(gameID).child("round0").removeValue()
+            hostDelete.isHidden = false
         }
     }
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         switch segue.identifier {
         case "toDraw"?:
-            let destination = segue.destination as! DrawViewController
-            destination.userID = self.userID
-            destination.gameID = self.gameID
-            destination.idList = self.idList
-            destination.isEven = self.isEven
-            destination.isHost = self.isHost
-            destination.name = self.name
-            destination.nameList = self.nameList
+            guard let destination = segue.destination as? DrawViewController else { return }
+            destination.userID = userID
+            destination.gameID = gameID
+            destination.idList = idList
+            destination.isEven = isEven
+            destination.isHost = isHost
+            destination.name = name
+            destination.nameList = nameList
             destination.round = 1
-            destination.timerCount = self.time
+            destination.timerCount = time
         default:
             return
         }
     }
     
     @IBAction func deleteGame() {
-        self.ref.child("games").child(self.gameID).removeValue()
-        self.ref.child("games").child(self.gameID).child("round0").removeAllObservers()
-        self.performSegue(withIdentifier: "toLobby", sender: nil)
+        guard let gameID = gameID else { return }
+        ref.child("games").child(gameID).removeValue()
+        ref.child("games").child(gameID).child("round0").removeAllObservers()
+        performSegue(withIdentifier: "toLobby", sender: nil)
     }
         
     @IBAction func useCustomWord() {
-        if customCount! > 0 {
-            self.wordField.isUserInteractionEnabled = true
-            self.wordField.text = ""
-            self.wordField.backgroundColor = .white
-            self.ref.child("users").child(self.userID!).child("custom").setValue(customCount! - 1)
-            self.customCountLabel.text = "You have " + String(self.customCount - 1) + " custom tokens left"
-            self.customWordButton.isHidden = true
+        guard let customCount = customCount, let userID = userID else { return }
+        if customCount > 0 {
+            wordField.isUserInteractionEnabled = true
+            wordField.text = ""
+            wordField.backgroundColor = .white
+            ref.child("users").child(userID).child("custom").setValue(customCount - 1)
+            customCountLabel.text = "You have " + String(customCount - 1) + " custom tokens left"
+            customWordButton.isHidden = true
         } else {
             print("no custom tokens")
         }
@@ -141,9 +147,9 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
                 if randomWord == "" {
                     randomWord = "turtle"
                 }
-                self.wordField.text = randomWord
+                wordField.text = randomWord
             } catch let error {
-                Swift.print("Fatal Error: \(error.localizedDescription)")
+                print("Fatal Error: \(error.localizedDescription)")
             }
             newWordCounts += 1
         }
@@ -161,33 +167,38 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
             }
             self.wordField.text = randomWord
         } catch let error {
-            Swift.print("Fatal Error: \(error.localizedDescription)")
+            print("Fatal Error: \(error.localizedDescription)")
         }
-        self.ref.child("users").child(userID!).child("custom").observeSingleEvent(of: .value, with: { (snapshot) in
+        guard let userID = userID else { return }
+        ref.child("users").child(userID).child("custom").observeSingleEvent(of: .value, with: { [weak self] (snapshot) in
+            guard let self = self else { return }
             self.customCount = snapshot.value as? Int
-            self.customCountLabel.text = "You have " + String(self.customCount) + " custom tokens left"
+            self.customCountLabel.text = "You have " + String(self.customCount ?? 0) + " custom tokens left"
         }) { (error) in
             print(error.localizedDescription)
         }
     }
     
     @IBAction func submitWord() {
-        if self.wordField.text != "" {
+        if wordField.text != "" {
             writeWordToDB()
-            self.submitButton.isHidden = true
-            self.mainLabel.adjustsFontSizeToFitWidth = true
-            self.mainLabel.text = "Waiting for other players..."
-            self.wordField.isHidden = true
-            self.customCountLabel.isHidden = true
-            self.customWordButton.isHidden = true
+            submitButton.isHidden = true
+            mainLabel.adjustsFontSizeToFitWidth = true
+            mainLabel.text = "Waiting for other players..."
+            wordField.isHidden = true
+            customCountLabel.isHidden = true
+            customWordButton.isHidden = true
             wordField.resignFirstResponder()
-            self.ref.child("games").child(self.gameID).child("round0").observe(.value) { snapshot in
+            
+            guard let gameID = gameID else { return }
+            ref.child("games").child(gameID).child("round0").observe(.value) { [weak self] snapshot in
+                guard let self = self else { return }
                 if snapshot.childrenCount == (self.idList.count + self.evenAddition) {
                     print("everyone submitted")
-                    self.ref.child("games").child(self.gameID).child("round0").removeAllObservers()
+                    self.ref.child("games").child(gameID).child("round0").removeAllObservers()
                     self.performSegue(withIdentifier: "toDraw", sender: nil)
                 } else if !snapshot.exists() {
-                    self.ref.child("games").child(self.gameID).child("round0").removeAllObservers()
+                    self.ref.child("games").child(gameID).child("round0").removeAllObservers()
                     self.performSegue(withIdentifier: "toLobby", sender: nil)
                 }
             }
@@ -195,18 +206,21 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
     }
     
     func writeWordToDB() {
+        guard let gameID = gameID, let userID = userID else { return }
         if wordField.text != "" {
-            ref.child("games").child(gameID!).child("round0").child(userID).setValue(self.wordField.text)
+            ref.child("games").child(gameID).child("round0").child(userID).setValue(wordField.text)
         } else {
             print("word is empty")
         }
     }
     
     func loadTime() {
-        self.ref.child("games").child(gameID!).child("time").observeSingleEvent(of: .value, with: { (snapshot) in
+        guard let gameID = gameID else { return }
+        ref.child("games").child(gameID).child("time").observeSingleEvent(of: .value, with: { [weak self] (snapshot) in
+            guard let self = self else { return }
             let newTime = snapshot.value as? Int ?? -1
             if newTime == -1 {
-                self.ref.child("games").child(self.gameID).child("round0").removeAllObservers()
+                self.ref.child("games").child(gameID).child("round0").removeAllObservers()
                 self.performSegue(withIdentifier: "toLobby", sender: nil)
             } else {
                 self.time = newTime // error here for ending
@@ -220,7 +234,8 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
     func loadPlayerList() {
         idList.removeAll()
         nameList.removeAll()
-        self.ref.child("games").child(gameID!).child("players").queryOrdered(byChild: "timestamp").observeSingleEvent(of: .value, with: { (snapshot) in
+        ref.child("games").child(gameID!).child("players").queryOrdered(byChild: "timestamp").observeSingleEvent(of: .value, with: { [weak self] (snapshot) in
+            guard let self = self else { return }
             if snapshot.childrenCount % 2 == 0 {
                 self.isEven = true
                 self.evenAddition = 0
@@ -244,13 +259,14 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
     }
     
     func organizeIdList() {
-        let indexOfSelf = self.idList.firstIndex(of: self.userID)
+        guard let userID = userID else { return }
+        let indexOfSelf = idList.firstIndex(of: userID)
         var before: [String] = []
         var after: [String] = []
         var beforeName: [String] = []
         var afterName: [String] = []
         var count = 0
-        for id in self.idList {
+        for id in idList {
             if count < indexOfSelf! {
                 before.append(id)
             } else if count > indexOfSelf! {
@@ -259,7 +275,7 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
             count = count + 1
         }
         count = 0
-        for name in self.nameList {
+        for name in nameList {
             if count < indexOfSelf! {
                 beforeName.append(name)
             } else if count > indexOfSelf! {
@@ -269,18 +285,19 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
         }
         after.append(contentsOf: before)
         afterName.append(contentsOf: beforeName)
-        self.idList = after
-        self.nameList = afterName
+        idList = after
+        nameList = afterName
     }
     
     func setUserAtFront() {
-        let indexOfSelf = self.idList.firstIndex(of: self.userID)
+        guard let userID = userID else { return }
+        let indexOfSelf = idList.firstIndex(of: userID)
         var before: [String] = []
         var after: [String] = []
         var beforeName: [String] = []
         var afterName: [String] = []
         var count = 0
-        for id in self.idList {
+        for id in idList {
             if count < indexOfSelf! {
                 before.append(id)
             } else {
@@ -289,7 +306,7 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
             count = count + 1
         }
         count = 0
-        for name in self.nameList {
+        for name in nameList {
             if count < indexOfSelf! {
                 beforeName.append(name)
             } else {
@@ -299,24 +316,12 @@ class NewWordViewController: UIViewController, UITextFieldDelegate {
         }
         after.append(contentsOf: before)
         afterName.append(contentsOf: beforeName)
-        self.idList = after
-        self.nameList = afterName
+        idList = after
+        nameList = afterName
     }
     
     func textFieldDidBeginEditing(_ textField: UITextField) {
         textField.shake()
     }
-    
-
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
-    }
-    */
-
 }
 

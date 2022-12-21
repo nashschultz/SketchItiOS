@@ -12,13 +12,13 @@ import GoogleMobileAds
 
 class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewardedAdDelegate, GADRewardedAdMetadataDelegate {
     
-    var uid: String!
-    var name: String!
-    var ref: DatabaseReference!
+    var uid: String?
+    var name: String?
+    var ref = Database.database().reference()
     var rewardAd: GADRewardedAd?
-    var alertController: UIAlertController!
-    var customCount: Int!
-    var viewDidLoadAlready: Bool!
+    var alertController: UIAlertController?
+    var customCount: Int?
+    var viewDidLoadAlready: Bool?
     
     @IBOutlet weak var nameField: UITextField!
     @IBOutlet weak var joinButton: UIButton!
@@ -32,7 +32,6 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        ref = Database.database().reference()
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(self.dismissKeyboard (_:)))
         self.view.addGestureRecognizer(tapGesture)
         
@@ -47,12 +46,12 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
         }
         
         alertController = UIAlertController(title: "Custom Words", message: "Watch this video to receive 3 custom words", preferredStyle: UIAlertController.Style.alert)
-        alertController.addAction(UIAlertAction(title: "Yes please", style: UIAlertAction.Style.default) {
+        alertController?.addAction(UIAlertAction(title: "Yes please", style: UIAlertAction.Style.default) {
             UIAlertAction in
                 // Insert code to run on button click below
                 self.runVideoAd()
         })
-        alertController.addAction(UIAlertAction(title: "No thanks", style: UIAlertAction.Style.destructive, handler: nil))
+        alertController?.addAction(UIAlertAction(title: "No thanks", style: UIAlertAction.Style.destructive, handler: nil))
         
         joinButton.layer.cornerRadius = 20.0
         createButton.layer.cornerRadius = 20.0
@@ -81,6 +80,7 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
     
     
     @IBAction func getCustomTokens() {
+        guard let alertController = alertController else { return }
         self.present(alertController, animated: true, completion: nil)
     }
     
@@ -110,10 +110,13 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
     
     
     func loadTokens() {
-        self.ref.child("users").child(uid).child("custom").observeSingleEvent(of: .value, with: { (snapshot) in
+        guard let uid = uid else { return }
+        
+        ref.child("users").child(uid).child("custom").observeSingleEvent(of: .value, with: { [weak self] (snapshot) in
+            guard let self = self, let customCount = self.customCount else { return }
             self.customCount = snapshot.value as? Int
-            self.ref.child("users").child(self.uid).child("custom").setValue(self.customCount + 3)
-            self.customTokensLabel.text = "You have " + String(self.customCount + 3) + " custom words"
+            self.ref.child("users").child(uid).child("custom").setValue(customCount + 3)
+            self.customTokensLabel.text = "You have " + String(customCount + 3) + " custom words"
         }) { (error) in
             print(error.localizedDescription)
         }
@@ -126,15 +129,15 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         switch segue.identifier {
         case "toStart"?:
-            let destination = segue.destination as! CreateGameViewController
+            guard let destination = segue.destination as? CreateGameViewController else { return }
             destination.currentName = self.name
             destination.userID = self.uid
         case "toJoin"?:
-            let destination = segue.destination as! JoinGameViewController
+            guard let destination = segue.destination as? JoinGameViewController else { return }
             destination.currentName = self.name
             destination.userID = self.uid
         case "toFind"?:
-            let destination = segue.destination as! FindGamesViewController
+            guard let destination = segue.destination as? FindGamesViewController else { return }
             destination.name = self.name
             destination.userID = self.uid
         default:
@@ -147,17 +150,18 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
     }
     
     func initializeUser() {
-        Auth.auth().signInAnonymously() { (authResult, error) in
-            guard let user = authResult?.user else { return }
+        Auth.auth().signInAnonymously() { [weak self] (authResult, error) in
+            guard let self = self, let user = authResult?.user else { return }
             self.uid = user.uid
-            self.ref.child("users").child(self.uid).child("custom").observeSingleEvent(of: .value, with: { (snapshot) in
+            self.ref.child("users").child(user.uid).child("custom").observeSingleEvent(of: .value, with: { [weak self] (snapshot) in
+                guard let self = self else { return }
                 self.customCount = snapshot.value as? Int
                 if self.customCount == nil {
-                    self.ref.child("users").child(self.uid).child("custom").setValue(3)
+                    self.ref.child("users").child(user.uid).child("custom").setValue(3)
                     self.customTokensLabel.text = "You have 3 custom words"
                     self.performSegue(withIdentifier: "toHelp", sender: nil)
                 } else {
-                    self.customTokensLabel.text = "You have " + String(self.customCount) + " custom words"
+                    self.customTokensLabel.text = "You have " + String(self.customCount ?? 0) + " custom words"
                 }
             }) { (error) in
                 print(error.localizedDescription)
@@ -205,9 +209,9 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
         if let fileURL = dir?.appendingPathComponent(fileName).appendingPathExtension("txt") {
 
             // Write to the file named Test
-            let outString = self.nameField.text
+            guard let outString = self.nameField.text else { return }
             do {
-                try outString!.write(to: fileURL, atomically: true, encoding: .utf8)
+                try outString.write(to: fileURL, atomically: true, encoding: .utf8)
             } catch {
                 print("Failed writing to URL: \(fileURL), Error: " + error.localizedDescription)
             }
@@ -229,7 +233,7 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
                 print("Failed reading from URL: \(fileURL), Error: " + error.localizedDescription)
             }
             print("Read from the file: \(inString)")
-            self.nameField.text = inString
+            nameField.text = inString
         }
     }
     
@@ -239,11 +243,7 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
         let contactAction = (UIAlertAction(title: "Contact Us", style: .default) { UIAlertAction in
             let email = "real.ones.quiz@gmail.com"
             if let url = URL(string: "mailto:\(email)") {
-              if #available(iOS 10.0, *) {
                 UIApplication.shared.open(url)
-              } else {
-                UIApplication.shared.openURL(url)
-              }
             }
         })
         let followInstagram = (UIAlertAction(title: "Follow our Instagram", style: .default) { UIAlertAction in
@@ -317,18 +317,6 @@ class MainMenuViewController: UIViewController, UITextFieldDelegate, GADRewarded
         animation.toValue = CGPoint(x: settingsButton.center.x, y: settingsButton.center.y)
         settingsButton.layer.add(animation, forKey: "position")
     }
-    
-
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
-    }
-    */
-
 }
 
 extension UITextField {
